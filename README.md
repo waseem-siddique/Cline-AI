@@ -40,6 +40,17 @@ npx serve .        # or: npx http-server -p 8000
 It works, but a local server is better: on `file://` some browsers disable the Web Crypto API, and
 the app then falls back to a weaker password hash (it warns you by still working, just less safely).
 
+## Deploy to GitHub Pages
+
+This repository includes a workflow at `.github/workflows/deploy-pages.yml` that deploys the site to
+GitHub Pages on every push to `main`.
+
+1. Push these changes to `main`.
+2. In GitHub, open **Settings → Pages**.
+3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+4. Wait for the **Deploy static site to GitHub Pages** workflow to complete.
+5. Open your site at `https://waseem-siddique.github.io/Cline-AI/`.
+
 ### First run
 
 1. Open the landing page and choose **Get started**.

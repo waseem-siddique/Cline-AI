@@ -155,7 +155,7 @@ window.CL = (function(){
     /* per-user workspace data */
     data:function(id){
       return read(K.data(id), {
-        settings:{apiKey:"", model:"anthropic/claude-opus-4.1", system:"You are a helpful assistant. Be accurate and concise.", temperature:0.7, maxTokens:0},
+        settings:{provider:"openrouter", model:"anthropic/claude-opus-4.1", keys:{}, bases:{}, system:"You are a helpful assistant. Be accurate and concise.", temperature:0.7},
         chats:[]
       });
     },
@@ -252,16 +252,9 @@ window.CL = (function(){
     for(var j=0;j<nodes.length;j++) io.observe(nodes[j]);
   }
 
-  var MODELS = [
-    {id:"anthropic/claude-opus-4.1",          label:"Claude Opus 4.1",  note:"Deepest reasoning"},
-    {id:"anthropic/claude-sonnet-4.5",        label:"Claude Sonnet 4.5",note:"Fast all-rounder"},
-    {id:"openai/gpt-4o",                      label:"GPT-4o",           note:"Multimodal"},
-    {id:"openai/gpt-4o-mini",                 label:"GPT-4o mini",      note:"Cheapest"},
-    {id:"google/gemini-2.5-flash",            label:"Gemini 2.5 Flash", note:"Long context"},
-    {id:"meta-llama/llama-3.3-70b-instruct",  label:"Llama 3.3 70B",    note:"Open weights"},
-    {id:"deepseek/deepseek-chat",             label:"DeepSeek V3",      note:"Strong at code"}
-  ];
-
+  /* ---------- providers ----------
+     type: "openai" = OpenAI-compatible /chat/completions, "anthropic" = /messages,
+     "gemini" = :streamGenerateContent. Keys are per provider and stay on this device. */
   /* ---------- splash ---------- */
   function splash(minMs){
     var el = document.getElementById("splash");
@@ -278,9 +271,84 @@ window.CL = (function(){
     else addEventListener("load", hide, {once:true});
   }
 
+  var PROVIDERS = [
+    {id:"openrouter", label:"OpenRouter", type:"openai", base:"https://openrouter.ai/api/v1",
+     keyHint:"sk-or-v1-…", keysUrl:"https://openrouter.ai/keys", note:"One key, every model",
+     models:[
+       {id:"anthropic/claude-opus-4.1", label:"Claude Opus 4.1"},
+       {id:"anthropic/claude-sonnet-4.5", label:"Claude Sonnet 4.5"},
+       {id:"openai/gpt-4o", label:"GPT-4o"},
+       {id:"openai/gpt-4o-mini", label:"GPT-4o mini"},
+       {id:"google/gemini-2.5-flash", label:"Gemini 2.5 Flash"},
+       {id:"meta-llama/llama-3.3-70b-instruct", label:"Llama 3.3 70B"},
+       {id:"deepseek/deepseek-chat", label:"DeepSeek V3"}
+     ]},
+    {id:"openai", label:"OpenAI", type:"openai", base:"https://api.openai.com/v1",
+     keyHint:"sk-…", keysUrl:"https://platform.openai.com/api-keys", note:"GPT models",
+     models:[
+       {id:"gpt-4o", label:"GPT-4o"},
+       {id:"gpt-4o-mini", label:"GPT-4o mini"},
+       {id:"gpt-4.1", label:"GPT-4.1"},
+       {id:"gpt-4.1-mini", label:"GPT-4.1 mini"},
+       {id:"o4-mini", label:"o4-mini (reasoning)"}
+     ]},
+    {id:"anthropic", label:"Anthropic", type:"anthropic", base:"https://api.anthropic.com/v1",
+     keyHint:"sk-ant-…", keysUrl:"https://console.anthropic.com/settings/keys", note:"Claude models",
+     models:[
+       {id:"claude-opus-4-1-20250805", label:"Claude Opus 4.1"},
+       {id:"claude-sonnet-4-5-20250929", label:"Claude Sonnet 4.5"},
+       {id:"claude-3-5-haiku-latest", label:"Claude 3.5 Haiku"}
+     ]},
+    {id:"gemini", label:"Google Gemini", type:"gemini", base:"https://generativelanguage.googleapis.com/v1beta",
+     keyHint:"AIza…", keysUrl:"https://aistudio.google.com/apikey", note:"Gemini models",
+     models:[
+       {id:"gemini-2.5-pro", label:"Gemini 2.5 Pro"},
+       {id:"gemini-2.5-flash", label:"Gemini 2.5 Flash"},
+       {id:"gemini-2.0-flash", label:"Gemini 2.0 Flash"}
+     ]},
+    {id:"groq", label:"Groq", type:"openai", base:"https://api.groq.com/openai/v1",
+     keyHint:"gsk_…", keysUrl:"https://console.groq.com/keys", note:"Very fast open models",
+     models:[
+       {id:"llama-3.3-70b-versatile", label:"Llama 3.3 70B"},
+       {id:"deepseek-r1-distill-llama-70b", label:"DeepSeek R1 Distill 70B"}
+     ]},
+    {id:"mistral", label:"Mistral", type:"openai", base:"https://api.mistral.ai/v1",
+     keyHint:"…", keysUrl:"https://console.mistral.ai/api-keys", note:"Mistral models",
+     models:[
+       {id:"mistral-large-latest", label:"Mistral Large"},
+       {id:"mistral-small-latest", label:"Mistral Small"}
+     ]},
+    {id:"deepseek", label:"DeepSeek", type:"openai", base:"https://api.deepseek.com/v1",
+     keyHint:"sk-…", keysUrl:"https://platform.deepseek.com/api_keys", note:"Chat and reasoner",
+     models:[
+       {id:"deepseek-chat", label:"DeepSeek V3"},
+       {id:"deepseek-reasoner", label:"DeepSeek R1"}
+     ]},
+    {id:"xai", label:"xAI", type:"openai", base:"https://api.x.ai/v1",
+     keyHint:"xai-…", keysUrl:"https://console.x.ai", note:"Grok models",
+     models:[
+       {id:"grok-4", label:"Grok 4"},
+       {id:"grok-3", label:"Grok 3"}
+     ]},
+    {id:"custom", label:"Custom (OpenAI-compatible)", type:"openai", base:"",
+     keyHint:"your key", keysUrl:"", note:"Ollama, LM Studio, vLLM, a proxy…",
+     models:[]}
+  ];
+  function provider(id){
+    for(var i=0;i<PROVIDERS.length;i++) if(PROVIDERS[i].id === id) return PROVIDERS[i];
+    return PROVIDERS[0];
+  }
+  function modelLabel(providerId, modelId){
+    var p = provider(providerId), i;
+    for(i=0;i<p.models.length;i++) if(p.models[i].id === modelId) return p.models[i].label;
+    return modelId;
+  }
+  /* kept for the landing page marquee */
+  var MODELS = provider("openrouter").models.slice();
+
   theme.apply();
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ splash(); });
   else splash();
-  return {K:K, splash:splash, read:read, write:write, theme:theme, toast:toast, auth:auth, md:md, esc:esc,
+  return {K:K, splash:splash, PROVIDERS:PROVIDERS, provider:provider, modelLabel:modelLabel, read:read, write:write, theme:theme, toast:toast, auth:auth, md:md, esc:esc,
           copy:copy, download:download, reveal:reveal, MODELS:MODELS};
 })();

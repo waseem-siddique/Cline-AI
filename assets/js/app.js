@@ -4,7 +4,6 @@
   var user = CL.auth.require();
   if(!user) return;
 
-  var ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
   var MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   var $ = function(id){ return document.getElementById(id); };
 
@@ -12,6 +11,23 @@
   var activeId = null;
   var controller = null;
   var searchTerm = "";
+
+  /* migrate older single-key settings */
+  (function(){
+    var s = data.settings || (data.settings = {});
+    if(!s.keys || typeof s.keys !== "object") s.keys = {};
+    if(!s.bases || typeof s.bases !== "object") s.bases = {};
+    if(s.apiKey){ if(!s.keys.openrouter) s.keys.openrouter = s.apiKey; delete s.apiKey; }
+    if(!s.provider) s.provider = "openrouter";
+    if(!s.model) s.model = CL.provider(s.provider).models[0].id;
+    if(!CL.auth.saveData(user.id, data)) void 0;
+  })();
+
+  /* ---------------- providers ---------------- */
+  function curProvider(){ return CL.provider(data.settings.provider); }
+  function keyFor(p){ return (data.settings.keys && data.settings.keys[p.id]) || ""; }
+  function baseFor(p){ return ((data.settings.bases && data.settings.bases[p.id]) || p.base || "").replace(/\/+$/, ""); }
+  function firstModel(p){ return p.models.length ? p.models[0].id : data.settings.model; }
 
   /* ---------------- persistence ---------------- */
   function persist(){
@@ -23,7 +39,7 @@
     return null;
   }
   function newChat(){
-    var c = {id:"c_" + Date.now().toString(36), title:"New chat", createdAt:Date.now(), updatedAt:Date.now(), model:data.settings.model, messages:[]};
+    var c = {id:"c_" + Date.now().toString(36), title:"New chat", createdAt:Date.now(), updatedAt:Date.now(), provider:data.settings.provider, model:data.settings.model, messages:[]};
     data.chats.unshift(c); activeId = c.id; persist();
     return c;
   }
@@ -118,7 +134,8 @@
     if(m.role === "user"){ who.textContent = "You"; }
     else{
       var mid = document.createElement("span");
-      mid.className = "mid"; mid.textContent = labelFor(m.model || (chat() && chat().model) || data.settings.model);
+      mid.className = "mid";
+      mid.textContent = labelFor(m.provider || (chat() && chat().provider), m.model || (chat() && chat().model));
       who.appendChild(mid);
     }
     el.appendChild(who);
@@ -165,9 +182,10 @@
       });
     });
   }
-  function labelFor(id){
-    for(var i=0;i<CL.MODELS.length;i++) if(CL.MODELS[i].id === id) return CL.MODELS[i].label;
-    return id;
+  function labelFor(providerId, modelId){
+    var p = CL.provider(providerId || data.settings.provider);
+    var id = modelId || data.settings.model;
+    return CL.modelLabel(p.id, id) + " · " + p.label;
   }
 
   var scroll = $("scroll");
@@ -183,13 +201,14 @@
   function clearError(){ $("alert").hidden = true; }
   $("alertClose").addEventListener("click", clearError);
 
-  function friendlyError(status, detail){
-    if(status === 401 || status === 403) return "OpenRouter rejected the API key. Open Settings and paste a current key.";
-    if(status === 402) return "This OpenRouter account is out of credit for the selected model.";
-    if(status === 404) return "OpenRouter does not recognise this model ID. Pick another model or correct it in Settings.";
-    if(status === 429) return "Rate limited by OpenRouter. Wait a moment, then send again.";
-    if(status >= 500) return "OpenRouter had a server error (" + status + "). Try again shortly.";
-    return detail ? ("OpenRouter returned " + status + ": " + detail) : ("OpenRouter returned " + status + ".");
+  function friendlyError(p, status, detail){
+    var n = p.label;
+    if(status === 401 || status === 403) return n + " rejected the API key. Open Settings and paste a current " + n + " key.";
+    if(status === 402) return "This " + n + " account is out of credit for the selected model.";
+    if(status === 404) return n + " does not recognise this model ID. Pick another model for this provider.";
+    if(status === 429) return "Rate limited by " + n + ". Wait a moment, then send again.";
+    if(status >= 500) return n + " had a server error (" + status + "). Try again shortly.";
+    return detail ? (n + " returned " + status + ": " + detail) : (n + " returned " + status + ".");
   }
 
   /* ---------------- sending ---------------- */
@@ -199,24 +218,48 @@
     send.classList.toggle("stop", on);
     if(on) send.setAttribute("aria-label","Stop generating"); else send.removeAttribute("aria-label");
     $("modelPick").disabled = on;
+    $("providerPick").disabled = on;
     $("regen").disabled = on;
     if(!on) controller = null;
+  }
+
+  function deltaText(p, obj){
+    var i, out = "";
+    if(p.type === "anthropic"){
+      if(obj.type === "content_block_delta" && obj.delta){
+        if(typeof obj.delta.text === "string") return obj.delta.text;
+      }
+      return "";
+    }
+    if(p.type === "gemini"){
+      var cand = obj.candidates && obj.candidates[0];
+      var parts = cand && cand.content && cand.content.parts;
+      if(parts) for(i=0;i<parts.length;i++) if(typeof parts[i].text === "string") out += parts[i].text;
+      return out;
+    }
+    var d = obj.choices && obj.choices[0] && obj.choices[0].delta;
+    return d && typeof d.content === "string" ? d.content : "";
   }
 
   async function ask(){
     var c = chat();
     if(!c) c = newChat();
     clearError();
-    if(!data.settings.apiKey){
-      showError("No API key yet. Open Settings and add your OpenRouter key.");
+    var prov = curProvider();
+    if(!keyFor(prov)){
+      showError("No " + prov.label + " key yet. Open Settings and add one.");
+      openSettings(); return;
+    }
+    if(!baseFor(prov)){
+      showError("This custom provider needs a base URL. Add it in Settings.");
       openSettings(); return;
     }
 
     var modelId = data.settings.model;
-    c.model = modelId;
+    c.model = modelId; c.provider = prov.id;
     $("welcome").hidden = true; $("thread").hidden = false;
 
-    var slotMsg = {role:"assistant", content:"", model:modelId, ts:Date.now()};
+    var slotMsg = {role:"assistant", content:"", provider:prov.id, model:modelId, ts:Date.now()};
     var slot = paintMessage(slotMsg, -1);
     slot.body.innerHTML = '<span class="typing" aria-label="Waiting for the model"><i></i><i></i><i></i></span>';
     jumpToEnd();
@@ -244,20 +287,43 @@
     controller = new AbortController();
     busy(true);
 
-    var payload = {model:modelId, stream:true, messages:[]};
-    if(data.settings.system && data.settings.system.trim()) payload.messages.push({role:"system", content:data.settings.system.trim()});
-    payload.messages = payload.messages.concat(c.messages.map(function(m){ return {role:m.role, content:m.content}; }));
-    if(typeof data.settings.temperature === "number") payload.temperature = data.settings.temperature;
+    /* provider-agnostic history — the conversation follows you across providers */
+    var history = c.messages.map(function(m){ return {role:m.role, content:m.content}; });
+    var sys = data.settings.system && data.settings.system.trim();
+    var temp = typeof data.settings.temperature === "number" ? data.settings.temperature : null;
+    var base = baseFor(prov), key = keyFor(prov);
+    var url, headers = {"Content-Type":"application/json"}, payload;
+
+    if(prov.type === "anthropic"){
+      url = base + "/messages";
+      headers["x-api-key"] = key;
+      headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerous-direct-browser-access"] = "true";
+      payload = {model:modelId, max_tokens:4096, stream:true, messages:history};
+      if(sys) payload.system = sys;
+      if(temp !== null) payload.temperature = Math.min(1, temp);
+    }else if(prov.type === "gemini"){
+      url = base + "/models/" + encodeURIComponent(modelId) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(key);
+      payload = {contents:history.map(function(m){
+        return {role:m.role === "assistant" ? "model" : "user", parts:[{text:m.content}]};
+      })};
+      if(sys) payload.systemInstruction = {parts:[{text:sys}]};
+      if(temp !== null) payload.generationConfig = {temperature:temp};
+    }else{
+      url = base + "/chat/completions";
+      headers["Authorization"] = "Bearer " + key;
+      payload = {model:modelId, stream:true, messages:(sys ? [{role:"system", content:sys}] : []).concat(history)};
+      if(temp !== null) payload.temperature = temp;
+      if(prov.id === "openrouter"){
+        headers["HTTP-Referer"] = location.origin && location.origin !== "null" ? location.origin : "https://localhost";
+        headers["X-Title"] = "CLINE AI";
+      }
+    }
 
     try{
-      var res = await fetch(ENDPOINT, {
+      var res = await fetch(url, {
         method:"POST",
-        headers:{
-          "Authorization":"Bearer " + data.settings.apiKey,
-          "Content-Type":"application/json",
-          "HTTP-Referer": location.origin && location.origin !== "null" ? location.origin : "https://localhost",
-          "X-Title":"CLINE AI"
-        },
+        headers:headers,
         body:JSON.stringify(payload),
         signal:controller.signal
       });
@@ -281,11 +347,8 @@
           var payloadLine = line.slice(5).trim();
           if(payloadLine === "[DONE]"){ buf = ""; break; }
           try{
-            var obj = JSON.parse(payloadLine);
-            var d = obj.choices && obj.choices[0] && obj.choices[0].delta;
-            if(d && typeof d.content === "string" && d.content){
-              acc += d.content; started = true; paint();
-            }
+            var piece = deltaText(prov, JSON.parse(payloadLine));
+            if(piece){ acc += piece; started = true; paint(); }
           }catch(e){}
         }
       }
@@ -316,9 +379,9 @@
       }else{
         slot.el.remove();
         undoLastUser(c);
-        if(err && err.kind === "http") showError(friendlyError(err.status, err.detail));
+        if(err && err.kind === "http") showError(friendlyError(prov, err.status, err.detail));
         else if(err && err.kind === "nostream") showError("This browser could not read the streamed response. Use a current version of Chrome, Edge, Safari or Firefox.");
-        else showError("Could not reach OpenRouter. Check your connection, then send again.");
+        else showError("Could not reach " + prov.label + ". Check your connection and base URL. Some providers (OpenAI among them) block direct browser calls with CORS — OpenRouter, Anthropic, Gemini and Groq work from the browser.");
       }
     }finally{
       busy(false);
@@ -376,12 +439,22 @@
   });
   $("send").addEventListener("click", submit);
 
-  /* ---------------- model pickers ---------------- */
-  function fillComposerPicker(){
-    var sel = $("modelPick");
+  /* ---------------- provider + model pickers ---------------- */
+  function fillProviderPicker(){
+    var sel = $("providerPick");
     sel.innerHTML = "";
-    var seen = false;
-    CL.MODELS.forEach(function(m){
+    CL.PROVIDERS.forEach(function(p){
+      var o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.label + (keyFor(p) ? "" : " — no key");
+      if(p.id === data.settings.provider) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  function fillComposerPicker(){
+    var sel = $("modelPick"), p = curProvider(), seen = false;
+    sel.innerHTML = "";
+    p.models.forEach(function(m){
       var o = document.createElement("option");
       o.value = m.id; o.textContent = m.label;
       if(m.id === data.settings.model){ o.selected = true; seen = true; }
@@ -392,12 +465,32 @@
       o2.value = data.settings.model; o2.textContent = data.settings.model; o2.selected = true;
       sel.insertBefore(o2, sel.firstChild);
     }
+    var other = document.createElement("option");
+    other.value = "__custom__"; other.textContent = "Other model ID…";
+    sel.appendChild(other);
   }
+  $("providerPick").addEventListener("change", function(){
+    var p = CL.provider(this.value);
+    data.settings.provider = p.id;
+    var known = p.models.some(function(m){ return m.id === data.settings.model; });
+    if(!known) data.settings.model = firstModel(p);
+    var c = chat();
+    if(c){ c.provider = p.id; c.model = data.settings.model; }
+    persist(); fillProviderPicker(); fillComposerPicker(); reflectKey(); clearError();
+    if(keyFor(p)) CL.toast("Switched to " + labelFor(p.id, data.settings.model) + ". This conversation carries over.", null, 2400);
+    else CL.toast(p.label + " has no key yet — add one in Settings.", "bad", 2600);
+  });
   $("modelPick").addEventListener("change", function(){
-    data.settings.model = this.value;
-    var c = chat(); if(c) c.model = this.value;
-    persist();
-    CL.toast("Now using " + labelFor(this.value) + ".", null, 1800);
+    if(this.value === "__custom__"){
+      var id = prompt("Model ID for " + curProvider().label + ":", data.settings.model);
+      if(!id || !id.trim()){ fillComposerPicker(); return; }
+      data.settings.model = id.trim();
+    }else{
+      data.settings.model = this.value;
+    }
+    var c = chat(); if(c){ c.model = data.settings.model; c.provider = data.settings.provider; }
+    persist(); fillComposerPicker();
+    CL.toast("Now using " + labelFor(null, data.settings.model) + ".", null, 1800);
   });
 
   /* ---------------- presets ---------------- */
@@ -435,35 +528,81 @@
       row.appendChild(b);
     });
   })();
+  var draftKeys = {}, draftBases = {}, dlgProvider = "openrouter";
+
   (function(){
-    var sel = $("modelSelect");
-    CL.MODELS.forEach(function(m){
+    var sel = $("providerSelect");
+    CL.PROVIDERS.forEach(function(p){
       var o = document.createElement("option");
-      o.value = m.id; o.textContent = m.label + " — " + m.note;
+      o.value = p.id; o.textContent = p.label;
       sel.appendChild(o);
     });
-    var other = document.createElement("option");
-    other.value = "__custom__"; other.textContent = "Other model ID…";
-    sel.appendChild(other);
     sel.addEventListener("change", function(){
-      var custom = sel.value === "__custom__";
+      stashDialog();
+      loadProvider(this.value);
+    });
+    $("modelSelect").addEventListener("change", function(){
+      var custom = this.value === "__custom__";
       $("customWrap").hidden = !custom;
       if(custom) setTimeout(function(){ $("customModel").focus(); }, 0);
     });
   })();
+
+  function stashDialog(){
+    draftKeys[dlgProvider] = $("apiKey").value.trim();
+    draftBases[dlgProvider] = $("baseUrl").value.trim();
+  }
+  function loadProvider(id){
+    dlgProvider = id;
+    var p = CL.provider(id);
+    $("keyLabel").textContent = p.label + " API key";
+    $("apiKey").placeholder = p.keyHint;
+    $("apiKey").value = draftKeys[id] || "";
+    $("apiKey").type = "password";
+    $("revealKey").textContent = "Show"; $("revealKey").setAttribute("aria-pressed","false");
+    $("baseUrl").placeholder = p.base || "http://localhost:11434/v1";
+    $("baseUrl").value = draftBases[id] || "";
+    $("providerNote").textContent = p.note;
+    $("keyNote").innerHTML = p.keysUrl
+      ? ('Get a key at <a href="' + p.keysUrl + '" target="_blank" rel="noopener noreferrer">' + CL.esc(p.keysUrl.replace(/^https:\/\//, "")) + "</a>. Stored in this browser only, sent only to " + CL.esc(p.label) + ".")
+      : "Stored in this browser only.";
+    var saved = CL.PROVIDERS.filter(function(q){ return (draftKeys[q.id] || "").length; }).map(function(q){ return q.label; });
+    $("keyList").textContent = saved.length ? ("Keys saved for: " + saved.join(", ")) : "No keys saved yet.";
+
+    var sel = $("modelSelect"), active = (id === data.settings.provider), known = false;
+    sel.innerHTML = "";
+    p.models.forEach(function(m){
+      var o = document.createElement("option");
+      o.value = m.id; o.textContent = m.label;
+      sel.appendChild(o);
+      if(active && m.id === data.settings.model) known = true;
+    });
+    var other = document.createElement("option");
+    other.value = "__custom__"; other.textContent = "Other model ID…";
+    sel.appendChild(other);
+    if(active && !known){
+      sel.value = "__custom__";
+      $("customModel").value = data.settings.model;
+      $("customWrap").hidden = false;
+    }else{
+      sel.value = active ? data.settings.model : (p.models.length ? p.models[0].id : "__custom__");
+      $("customModel").value = "";
+      $("customWrap").hidden = sel.value !== "__custom__";
+    }
+  }
   $("temp").addEventListener("input", function(){ $("tempVal").textContent = Number(this.value).toFixed(1); });
 
   function openSettings(){
-    $("apiKey").value = data.settings.apiKey;
-    $("apiKey").type = "password";
-    $("revealKey").textContent = "Show"; $("revealKey").setAttribute("aria-pressed","false");
+    draftKeys = {}; draftBases = {};
+    CL.PROVIDERS.forEach(function(p){
+      draftKeys[p.id] = (data.settings.keys && data.settings.keys[p.id]) || "";
+      draftBases[p.id] = (data.settings.bases && data.settings.bases[p.id]) || "";
+    });
     $("systemPrompt").value = data.settings.system;
     $("temp").value = String(typeof data.settings.temperature === "number" ? data.settings.temperature : 0.7);
     $("tempVal").textContent = Number($("temp").value).toFixed(1);
-    var known = CL.MODELS.some(function(m){ return m.id === data.settings.model; });
-    $("modelSelect").value = known ? data.settings.model : "__custom__";
-    $("customModel").value = known ? "" : data.settings.model;
-    $("customWrap").hidden = known;
+    $("providerSelect").value = data.settings.provider;
+    loadProvider(data.settings.provider);
     dlg.showModal();
   }
   $("openSettings").addEventListener("click", openSettings);
@@ -476,13 +615,22 @@
     this.setAttribute("aria-pressed", String(!shown));
   });
   $("settingsForm").addEventListener("submit", function(){
-    data.settings.apiKey = $("apiKey").value.trim();
+    stashDialog();
+    data.settings.keys = {}; data.settings.bases = {};
+    CL.PROVIDERS.forEach(function(p){
+      if(draftKeys[p.id]) data.settings.keys[p.id] = draftKeys[p.id];
+      if(draftBases[p.id]) data.settings.bases[p.id] = draftBases[p.id];
+    });
+    data.settings.provider = dlgProvider;
     data.settings.system = $("systemPrompt").value;
     data.settings.temperature = Number($("temp").value);
     var chosen = $("modelSelect").value;
-    data.settings.model = chosen === "__custom__" ? ($("customModel").value.trim() || data.settings.model) : chosen;
-    persist(); fillComposerPicker(); reflectKey(); clearError();
-    CL.toast("Settings saved.", "good");
+    data.settings.model = chosen === "__custom__"
+      ? ($("customModel").value.trim() || firstModel(curProvider()))
+      : chosen;
+    var c = chat(); if(c && !c.messages.length){ c.provider = data.settings.provider; c.model = data.settings.model; }
+    persist(); fillProviderPicker(); fillComposerPicker(); reflectKey(); clearError();
+    CL.toast("Settings saved — " + labelFor(null, data.settings.model) + ".", "good");
   });
   $("wipe").addEventListener("click", function(){
     if(!confirm("Delete every chat, your key and this account from this browser? This cannot be undone.")) return;
@@ -494,15 +642,19 @@
     CL.auth.logOut();
     location.replace("index.html");
   });
-  function reflectKey(){ $("needKey").hidden = !!data.settings.apiKey; }
+  function reflectKey(){
+    var p = curProvider(), has = !!keyFor(p);
+    $("needKey").hidden = has;
+    $("needKeyText").textContent = "Add your " + p.label + " API key to start chatting. It stays in this browser.";
+  }
 
   /* ---------------- export ---------------- */
   $("exportChat").addEventListener("click", function(){
     var c = chat();
     if(!c || !c.messages.length){ CL.toast("Nothing to export yet.", "bad"); return; }
-    var lines = ["# " + c.title, "", "Model: " + labelFor(c.model), "Exported: " + new Date().toISOString(), ""];
+    var lines = ["# " + c.title, "", "Model: " + labelFor(c.provider, c.model), "Exported: " + new Date().toISOString(), ""];
     c.messages.forEach(function(m){
-      lines.push("## " + (m.role === "user" ? "You" : labelFor(m.model || c.model)), "", m.content, "");
+      lines.push("## " + (m.role === "user" ? "You" : labelFor(m.provider || c.provider, m.model || c.model)), "", m.content, "");
     });
     CL.download(c.title.replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"-").toLowerCase() + ".md", lines.join("\n"), "text/markdown;charset=utf-8");
     CL.toast("Markdown exported.", "good");
@@ -567,6 +719,13 @@
       {label:"Keyboard shortcuts", hint:"Ctrl+/", run:function(){ $("shortcuts").showModal(); }},
       {label:"Sign out", run:function(){ $("signOut").click(); }}
     ];
+    CL.PROVIDERS.forEach(function(p){
+      base.push({label:"Provider: " + p.label, hint: keyFor(p) ? "ready" : "needs key", run:function(){
+        var sel = $("providerPick");
+        sel.value = p.id;
+        sel.dispatchEvent(new Event("change"));
+      }});
+    });
     data.chats.slice(0, 12).forEach(function(c){
       base.push({label:c.title, hint:"chat", run:function(){ open(c.id); }});
     });
@@ -654,6 +813,7 @@
   $("userEmail").textContent = user.email;
   $("welcomeTitle").textContent = "Ready when you are, " + user.name.split(" ")[0] + ".";
   if(!data.chats.length) newChat(); else activeId = data.chats[0].id;
+  fillProviderPicker();
   fillComposerPicker();
   reflectKey();
   renderAll();

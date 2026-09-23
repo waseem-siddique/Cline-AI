@@ -76,7 +76,7 @@
     <div class="scroll" id="scroll">
       <div class="welcome" id="welcome">
         <div class="needkey" id="needKey" hidden>
-          <span>Add your OpenRouter API key to start chatting. It stays in this browser.</span>
+          <span id="needKeyText">Add your API key to start chatting. It stays in this browser.</span>
           <button class="btn sm" type="button" id="needKeyBtn">Add key</button>
         </div>
         <h1 id="welcomeTitle">Ready when you are.</h1>
@@ -97,8 +97,10 @@
           <label class="sr" for="input">Message</label>
           <textarea id="input" rows="1" placeholder="Ask anything…"></textarea>
           <div class="controls">
+            <label class="sr" for="providerPick">Provider</label>
+            <select class="model" id="providerPick" title="Provider"></select>
             <label class="sr" for="modelPick">Model</label>
-            <select class="model" id="modelPick"></select>
+            <select class="model" id="modelPick" title="Model"></select>
             <button class="btn sm quiet" id="regen" type="button" hidden title="Regenerate last reply">Regenerate</button>
             <div class="grow"></div>
             <span class="count" id="count">Enter to send</span>
@@ -116,12 +118,23 @@
       <div><h2 id="settingsTitle">Settings</h2><p>Saved in this browser for your account only.</p></div>
     </header>
     <div class="field">
-      <label for="apiKey">OpenRouter API key</label>
+      <label for="providerSelect">Provider</label>
+      <select class="input" id="providerSelect"></select>
+      <p class="note" id="providerNote"></p>
+    </div>
+    <div class="field">
+      <label for="apiKey" id="keyLabel">API key</label>
       <div class="row">
-        <input class="input mono" type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false" />
+        <input class="input mono" type="password" id="apiKey" placeholder="sk-…" autocomplete="off" spellcheck="false" />
         <button class="btn secondary" type="button" id="revealKey" aria-pressed="false" style="min-width:74px">Show</button>
       </div>
-      <p class="note">Create one at <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">openrouter.ai/keys</a>. Sent only to OpenRouter.</p>
+      <p class="note" id="keyNote"></p>
+      <p class="note" id="keyList"></p>
+    </div>
+    <div class="field">
+      <label for="baseUrl">API base URL</label>
+      <input class="input mono" type="text" id="baseUrl" placeholder="https://…" spellcheck="false" />
+      <p class="note">Optional. Leave blank for the provider default — set it for a proxy, Ollama or LM Studio.</p>
     </div>
     <div class="field">
       <label for="modelSelect">Default model</label>
@@ -129,8 +142,8 @@
     </div>
     <div class="field" id="customWrap" hidden>
       <label for="customModel">Model ID</label>
-      <input class="input mono" type="text" id="customModel" placeholder="vendor/model-name" spellcheck="false" />
-      <p class="note">Any ID from openrouter.ai/models.</p>
+      <input class="input mono" type="text" id="customModel" placeholder="model-name" spellcheck="false" />
+      <p class="note">Any model ID this provider accepts.</p>
     </div>
     <div class="field">
       <label for="systemPrompt">System prompt</label>

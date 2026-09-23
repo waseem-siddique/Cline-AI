@@ -1,8 +1,9 @@
 # CLINE AI
 
-A browser-native chat client for [OpenRouter](https://openrouter.ai). One window for Claude Opus,
-GPT-4o, Gemini, Llama and DeepSeek — with a marketing landing page, local accounts, saved
-conversations and a light/dark theme switch.
+A browser-native chat client for nine model providers — **OpenRouter, OpenAI, Anthropic, Google
+Gemini, Groq, Mistral, DeepSeek, xAI** and any OpenAI-compatible endpoint (Ollama, LM Studio, a
+proxy). Switch provider and model mid-conversation and the thread follows. Ships with a marketing
+landing page, local accounts, saved conversations and a light/dark theme switch.
 
 Styled to match the **CampusPulse** design language: warm cream canvas, terracotta accent, serif
 display type, uppercase tracked labels, near-black primary buttons, and a warm near-black dark
@@ -43,9 +44,26 @@ the app then falls back to a weaker password hash (it warns you by still working
 
 1. Open the landing page and choose **Get started**.
 2. Create an account — name, email, password (8+ characters). It is stored in this browser only.
-3. In the workspace, open **Settings** and paste an OpenRouter API key from
-   <https://openrouter.ai/keys>.
-4. Pick a model under the composer and send a message.
+3. In the workspace, open **Settings**, choose a provider and paste its API key. You can add keys
+   for several providers in one visit — pick each from the Provider dropdown, paste, then Save.
+4. Pick a provider and model under the composer and send a message.
+
+### Providers and keys
+
+| Provider | Key from | Browser-callable |
+| --- | --- | --- |
+| OpenRouter | openrouter.ai/keys | yes |
+| OpenAI | platform.openai.com/api-keys | blocked by CORS — use a proxy or OpenRouter |
+| Anthropic | console.anthropic.com | yes (direct browser access header is sent) |
+| Google Gemini | aistudio.google.com/apikey | yes |
+| Groq | console.groq.com/keys | yes |
+| Mistral | console.mistral.ai/api-keys | yes |
+| DeepSeek | platform.deepseek.com | yes |
+| xAI | console.x.ai | yes |
+| Custom (OpenAI-compatible) | your own | depends on your server's CORS |
+
+Every provider row also accepts an **API base URL** override, so you can point CLINE AI at Ollama,
+LM Studio, vLLM or your own proxy.
 
 ---
 
@@ -66,9 +84,13 @@ the app then falls back to a weaker password hash (it warns you by still working
 **Workspace (`app.html`)**
 - Streaming replies over server-sent events, with **Stop** mid-answer and **Regenerate**
 - Unlimited saved chats: auto-titles, full-text search, delete, per-chat model memory
-- Model picker in the composer plus any custom OpenRouter model ID
+- Provider picker **and** model picker in the composer — switch either mid-chat and the full
+  conversation is replayed to the new provider (OpenAI, Anthropic and Gemini wire formats are all
+  handled, including their different streaming events)
+- Any custom model ID per provider
 - Command palette (`Ctrl/⌘ K`) over commands and chats, and a shortcuts sheet (`Ctrl/⌘ /`)
-- Settings: API key, default model, system prompt with four persona presets, creativity slider
+- Settings: per-provider API keys, optional base URL, default provider and model, system prompt
+  with four persona presets, creativity slider
 - Usage meter estimating messages and tokens per workspace
 - Markdown rendering with per-block code copy, message copy, edit-and-resend
 - Export any chat to Markdown
@@ -106,10 +128,10 @@ cline-ai/
 ├── assets/css/base.css     design tokens, buttons, fields, dialogs, toasts, theme switch
 ├── assets/css/landing.css  landing + auth layout and animations
 ├── assets/css/app.css      workspace layout, transcript, composer, palette
-├── assets/js/core.js       theme, storage, accounts, markdown, toasts, model list
+├── assets/js/core.js       theme, storage, accounts, markdown, toasts, provider registry
 ├── assets/js/landing.js    landing interactions
 ├── assets/js/auth-page.js  login / signup logic
-├── assets/js/app.js        workspace logic and OpenRouter streaming
+├── assets/js/app.js        workspace logic and multi-provider streaming
 └── README.md
 ```
 
@@ -122,7 +144,7 @@ Everything is in this browser's `localStorage`:
 | `cline.theme` | `light`, `dark` or `system` |
 | `cline.users.v1` | accounts: name, email, salt, password hash |
 | `cline.session.v1` | which account is signed in |
-| `cline.data.<userId>` | that account's API key, settings and chats |
+| `cline.data.<userId>` | that account's API keys, settings and chats |
 
 Nothing is uploaded. `Settings → Delete all my data` removes the account and its chats.
 
@@ -131,9 +153,10 @@ Nothing is uploaded. `Settings → Delete all my data` removes the account and i
 - **Auth is local, not secure.** There is no backend, so sign-up and login are verified in the
   browser. Anyone with devtools access can read `localStorage`. Treat accounts as profile
   separation on a shared machine, not as a security boundary.
-- **The API key is in the browser.** Fine on your own machine. Before hosting this publicly, add a
-  small server-side proxy that holds the key and forwards requests to OpenRouter, then point
-  `ENDPOINT` in `assets/js/app.js` at your proxy.
-- **Costs are yours.** The app is free; OpenRouter bills your key per token.
-- **Model IDs change.** If a listed model 404s, check current IDs at
-  <https://openrouter.ai/models> and paste one into Settings → Other model ID.
+- **The API keys are in the browser.** Fine on your own machine. Before hosting this publicly, add
+  a small server-side proxy that holds the keys, then set that proxy as the base URL in Settings.
+- **CORS is the provider's call.** OpenAI rejects direct browser requests; use OpenRouter or a
+  proxy for GPT models. OpenRouter, Anthropic, Gemini and Groq all allow them.
+- **Costs are yours.** The app is free; each provider bills your key per token.
+- **Model IDs change.** If a listed model 404s, check the provider's current IDs and paste one into
+  Settings → Other model ID.

@@ -37,11 +37,11 @@
       </div>
     </div>
     <div class="chats" id="chatList"></div>
-    <div class="usage" id="usage">
+    <button class="usage" id="usage" type="button" aria-haspopup="dialog" title="Token usage and model limits">
       <div class="usage-top"><span>This workspace</span><b id="usageTokens">0</b></div>
       <div class="bar"><i id="usageBar"></i></div>
-      <p class="usage-foot" id="usageFoot">0 messages across 0 chats</p>
-    </div>
+      <p class="usage-foot"><span id="usageFoot">0 messages across 0 chats</span><span class="usage-more">Details</span></p>
+    </button>
     <div class="side-foot">
       <div class="avatar" id="avatar">?</div>
       <div class="who"><b id="userName">—</b><span id="userEmail">—</span></div>
@@ -111,6 +111,23 @@
     </div>
   </div>
 </div>
+
+<dialog id="usageDlg" class="wide" aria-labelledby="usageTitle">
+  <div class="sheet">
+    <header>
+      <div>
+        <h2 id="usageTitle">Usage &amp; limits</h2>
+        <p>Token counts are estimates — about four characters per token. Each provider counts a little differently.</p>
+      </div>
+    </header>
+    <div id="usageBody"></div>
+    <footer>
+      <button class="btn secondary sm" type="button" id="usageSettings">Open settings</button>
+      <div class="grow"></div>
+      <button class="btn" type="button" id="closeUsage">Close</button>
+    </footer>
+  </div>
+</dialog>
 
 <dialog id="settings" aria-labelledby="settingsTitle">
   <form class="sheet" id="settingsForm" method="dialog">

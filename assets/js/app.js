@@ -110,6 +110,109 @@
       data.chats.length + (data.chats.length === 1 ? " chat" : " chats");
   }
 
+  /* ---------------- usage dialog ---------------- */
+  function tokensOf(text){ return Math.max(1, Math.round((text || "").length / 4)); }
+  function fmt(n){
+    if(n >= 1000000) return (n / 1000000).toFixed(n % 1000000 ? 1 : 0).replace(/\.0$/, "") + "M";
+    if(n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k";
+    return String(n);
+  }
+  function modelInfo(p, id){
+    for(var i=0;i<p.models.length;i++) if(p.models[i].id === id) return p.models[i];
+    return null;
+  }
+  function chatTokens(c){
+    var t = 0;
+    c.messages.forEach(function(m){ t += tokensOf(m.content); });
+    return t;
+  }
+  function openUsage(){
+    var prov = curProvider(), modelId = data.settings.model, info = modelInfo(prov, modelId);
+    var ctx = info && info.ctx ? info.ctx : 0;
+    var c = chat();
+    var sys = (data.settings.system || "").trim();
+    var sysT = sys ? tokensOf(sys) : 0;
+    var chatT = c ? chatTokens(c) : 0;
+    var nextT = chatT + sysT;
+    var pct = ctx ? Math.min(100, (nextT / ctx) * 100) : 0;
+    var msgs = 0, chars = 0, biggest = null, biggestT = 0;
+    data.chats.forEach(function(x){
+      msgs += x.messages.length;
+      var t = chatTokens(x);
+      x.messages.forEach(function(m){ chars += m.content.length; });
+      if(t > biggestT){ biggestT = t; biggest = x; }
+    });
+    var totalT = Math.round(chars / 4);
+    var userMsgs = c ? c.messages.filter(function(m){ return m.role === "user"; }).length : 0;
+    var avg = c && c.messages.length ? Math.round(chatT / c.messages.length) : 0;
+    var room = ctx ? Math.max(0, ctx - nextT) : 0;
+    var turnsLeft = ctx && avg ? Math.floor(room / (avg * 2 || 1)) : 0;
+
+    var html = "";
+    html += '<div class="u-now">' +
+      '<span class="dot"></span>' +
+      "<div><b>" + CL.esc(CL.modelLabel(prov.id, modelId)) + " · " + CL.esc(prov.label) + "</b>" +
+      "<small>" + CL.esc(modelId) + "</small></div>" +
+      '<span class="u-pill' + (keyFor(prov) ? '' : ' warn') + '">' + (keyFor(prov) ? "Key saved" : "No key") + "</span>" +
+      "</div>";
+
+    html += '<div class="u-sec"><h3>This conversation</h3>' +
+      '<div class="u-bar"><i id="uBar"></i></div>' +
+      '<div class="u-legend"><span>' + fmt(nextT) + " tokens in the next request</span><span>" +
+      (ctx ? (pct < 1 && nextT ? "<1" : Math.round(pct)) + "% of " + fmt(ctx) + " context" : "context window unknown") +
+      "</span></div></div>";
+
+    html += '<div class="u-sec"><div class="u-grid">' +
+      '<div class="u-card"><span>Chat tokens</span><b>' + fmt(chatT) + "</b><small>" + (c ? c.messages.length : 0) + " messages</small></div>" +
+      '<div class="u-card"><span>System prompt</span><b>' + fmt(sysT) + "</b><small>" + (sys ? "sent every turn" : "empty") + "</small></div>" +
+      '<div class="u-card"><span>Room left</span><b>' + (ctx ? fmt(room) : "—") + "</b><small>" + (ctx && turnsLeft ? "~" + turnsLeft + " more turns at this size" : "in the context window") + "</small></div>" +
+      '<div class="u-card"><span>Your turns</span><b>' + userMsgs + "</b><small>avg " + fmt(avg) + " tokens / message</small></div>" +
+      "</div></div>";
+
+    html += '<div class="u-sec"><h3>' + CL.esc(prov.label) + " model limits</h3>";
+    if(prov.models.length){
+      html += '<div class="u-scroll"><table class="u-models"><thead><tr><th>Model</th><th>Context window</th><th>This chat</th></tr></thead><tbody>';
+      prov.models.forEach(function(m){
+        var mp = m.ctx ? Math.min(100, (nextT / m.ctx) * 100) : 0;
+        html += '<tr class="' + (m.id === modelId ? "on" : "") + '"><td>' + CL.esc(m.label) + "</td><td>" +
+          (m.ctx ? fmt(m.ctx) + " tokens" : "—") + '</td><td class="tick">' +
+          (m.ctx ? (mp < 1 ? "<1% used" : Math.round(mp) + "% used") : "unknown") + "</td></tr>";
+      });
+      html += "</tbody></table></div>";
+    }else{
+      html += '<p class="u-note">This provider has no preset models — the context window depends on the endpoint you point it at.</p>';
+    }
+    html += "</div>";
+
+    html += '<div class="u-sec"><h3>Workspace</h3><div class="u-rows">' +
+      '<div class="u-row"><span>Chats</span><b>' + data.chats.length + "</b></div>" +
+      '<div class="u-row"><span>Messages</span><b>' + msgs + "</b></div>" +
+      '<div class="u-row"><span>Estimated tokens stored</span><b>' + fmt(totalT) + "</b></div>" +
+      '<div class="u-row"><span>Characters stored</span><b>' + chars.toLocaleString() + "</b></div>" +
+      (biggest ? '<div class="u-row"><span>Largest chat — ' + CL.esc(biggest.title) + "</span><b>" + fmt(biggestT) + " tokens</b></div>" : "") +
+      "</div></div>";
+
+    html += '<p class="u-note">Estimates only: CLINE AI counts about four characters per token and does not call a tokenizer. ' +
+      "The whole conversation is resent on every turn, so cost and context grow as a chat gets longer — start a new chat to reset it. " +
+      "Context windows are the published limits for each model and can change; output length is capped separately by each provider.</p>";
+
+    $("usageBody").innerHTML = html;
+    var dd = $("usageDlg");
+    dd.showModal();
+    dd.scrollTop = 0;
+    var head = $("usageTitle");
+    head.setAttribute("tabindex","-1");
+    head.focus({preventScroll:true});
+    requestAnimationFrame(function(){ dd.scrollTop = 0; });
+    requestAnimationFrame(function(){
+      var bar = document.getElementById("uBar");
+      if(bar) bar.style.width = (ctx ? Math.max(nextT ? 2 : 0, pct) : 0) + "%";
+    });
+  }
+  $("usage").addEventListener("click", openUsage);
+  $("closeUsage").addEventListener("click", function(){ $("usageDlg").close(); });
+  $("usageSettings").addEventListener("click", function(){ $("usageDlg").close(); openSettings(); });
+
   /* ---------------- transcript ---------------- */
   function renderThread(){
     var c = chat();
@@ -712,6 +815,7 @@
       {label:"New chat", hint:"Ctrl+Shift+O", run:function(){ $("newChat").click(); }},
       {label:"Open settings", hint:"Ctrl+,", run:openSettings},
       {label:"Export this chat as Markdown", run:function(){ $("exportChat").click(); }},
+      {label:"Usage and model limits", run:openUsage},
       {label:"Regenerate last reply", run:regenerate},
       {label:"Theme: light", run:function(){ CL.theme.set("light"); }},
       {label:"Theme: dark", run:function(){ CL.theme.set("dark"); }},

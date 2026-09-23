@@ -275,60 +275,60 @@ window.CL = (function(){
     {id:"openrouter", label:"OpenRouter", type:"openai", base:"https://openrouter.ai/api/v1",
      keyHint:"sk-or-v1-…", keysUrl:"https://openrouter.ai/keys", note:"One key, every model",
      models:[
-       {id:"anthropic/claude-opus-4.1", label:"Claude Opus 4.1"},
-       {id:"anthropic/claude-sonnet-4.5", label:"Claude Sonnet 4.5"},
-       {id:"openai/gpt-4o", label:"GPT-4o"},
-       {id:"openai/gpt-4o-mini", label:"GPT-4o mini"},
-       {id:"google/gemini-2.5-flash", label:"Gemini 2.5 Flash"},
-       {id:"meta-llama/llama-3.3-70b-instruct", label:"Llama 3.3 70B"},
-       {id:"deepseek/deepseek-chat", label:"DeepSeek V3"}
+       {id:"anthropic/claude-opus-4.1", label:"Claude Opus 4.1", ctx:200000},
+       {id:"anthropic/claude-sonnet-4.5", label:"Claude Sonnet 4.5", ctx:200000},
+       {id:"openai/gpt-4o", label:"GPT-4o", ctx:128000},
+       {id:"openai/gpt-4o-mini", label:"GPT-4o mini", ctx:128000},
+       {id:"google/gemini-2.5-flash", label:"Gemini 2.5 Flash", ctx:1048576},
+       {id:"meta-llama/llama-3.3-70b-instruct", label:"Llama 3.3 70B", ctx:131072},
+       {id:"deepseek/deepseek-chat", label:"DeepSeek V3", ctx:65536}
      ]},
     {id:"openai", label:"OpenAI", type:"openai", base:"https://api.openai.com/v1",
      keyHint:"sk-…", keysUrl:"https://platform.openai.com/api-keys", note:"GPT models",
      models:[
-       {id:"gpt-4o", label:"GPT-4o"},
-       {id:"gpt-4o-mini", label:"GPT-4o mini"},
-       {id:"gpt-4.1", label:"GPT-4.1"},
-       {id:"gpt-4.1-mini", label:"GPT-4.1 mini"},
-       {id:"o4-mini", label:"o4-mini (reasoning)"}
+       {id:"gpt-4o", label:"GPT-4o", ctx:128000},
+       {id:"gpt-4o-mini", label:"GPT-4o mini", ctx:128000},
+       {id:"gpt-4.1", label:"GPT-4.1", ctx:1047576},
+       {id:"gpt-4.1-mini", label:"GPT-4.1 mini", ctx:1047576},
+       {id:"o4-mini", label:"o4-mini (reasoning)", ctx:200000}
      ]},
     {id:"anthropic", label:"Anthropic", type:"anthropic", base:"https://api.anthropic.com/v1",
      keyHint:"sk-ant-…", keysUrl:"https://console.anthropic.com/settings/keys", note:"Claude models",
      models:[
-       {id:"claude-opus-4-1-20250805", label:"Claude Opus 4.1"},
-       {id:"claude-sonnet-4-5-20250929", label:"Claude Sonnet 4.5"},
-       {id:"claude-3-5-haiku-latest", label:"Claude 3.5 Haiku"}
+       {id:"claude-opus-4-1-20250805", label:"Claude Opus 4.1", ctx:200000},
+       {id:"claude-sonnet-4-5-20250929", label:"Claude Sonnet 4.5", ctx:200000},
+       {id:"claude-3-5-haiku-latest", label:"Claude 3.5 Haiku", ctx:200000}
      ]},
     {id:"gemini", label:"Google Gemini", type:"gemini", base:"https://generativelanguage.googleapis.com/v1beta",
      keyHint:"AIza…", keysUrl:"https://aistudio.google.com/apikey", note:"Gemini models",
      models:[
-       {id:"gemini-2.5-pro", label:"Gemini 2.5 Pro"},
-       {id:"gemini-2.5-flash", label:"Gemini 2.5 Flash"},
-       {id:"gemini-2.0-flash", label:"Gemini 2.0 Flash"}
+       {id:"gemini-2.5-pro", label:"Gemini 2.5 Pro", ctx:1048576},
+       {id:"gemini-2.5-flash", label:"Gemini 2.5 Flash", ctx:1048576},
+       {id:"gemini-2.0-flash", label:"Gemini 2.0 Flash", ctx:1048576}
      ]},
     {id:"groq", label:"Groq", type:"openai", base:"https://api.groq.com/openai/v1",
      keyHint:"gsk_…", keysUrl:"https://console.groq.com/keys", note:"Very fast open models",
      models:[
-       {id:"llama-3.3-70b-versatile", label:"Llama 3.3 70B"},
-       {id:"deepseek-r1-distill-llama-70b", label:"DeepSeek R1 Distill 70B"}
+       {id:"llama-3.3-70b-versatile", label:"Llama 3.3 70B", ctx:131072},
+       {id:"deepseek-r1-distill-llama-70b", label:"DeepSeek R1 Distill 70B", ctx:131072}
      ]},
     {id:"mistral", label:"Mistral", type:"openai", base:"https://api.mistral.ai/v1",
      keyHint:"…", keysUrl:"https://console.mistral.ai/api-keys", note:"Mistral models",
      models:[
-       {id:"mistral-large-latest", label:"Mistral Large"},
-       {id:"mistral-small-latest", label:"Mistral Small"}
+       {id:"mistral-large-latest", label:"Mistral Large", ctx:131072},
+       {id:"mistral-small-latest", label:"Mistral Small", ctx:32768}
      ]},
     {id:"deepseek", label:"DeepSeek", type:"openai", base:"https://api.deepseek.com/v1",
      keyHint:"sk-…", keysUrl:"https://platform.deepseek.com/api_keys", note:"Chat and reasoner",
      models:[
-       {id:"deepseek-chat", label:"DeepSeek V3"},
-       {id:"deepseek-reasoner", label:"DeepSeek R1"}
+       {id:"deepseek-chat", label:"DeepSeek V3", ctx:65536},
+       {id:"deepseek-reasoner", label:"DeepSeek R1", ctx:65536}
      ]},
     {id:"xai", label:"xAI", type:"openai", base:"https://api.x.ai/v1",
      keyHint:"xai-…", keysUrl:"https://console.x.ai", note:"Grok models",
      models:[
-       {id:"grok-4", label:"Grok 4"},
-       {id:"grok-3", label:"Grok 3"}
+       {id:"grok-4", label:"Grok 4", ctx:256000},
+       {id:"grok-3", label:"Grok 3", ctx:131072}
      ]},
     {id:"custom", label:"Custom (OpenAI-compatible)", type:"openai", base:"",
      keyHint:"your key", keysUrl:"", note:"Ollama, LM Studio, vLLM, a proxy…",

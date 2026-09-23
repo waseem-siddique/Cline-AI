@@ -91,7 +91,10 @@ LM Studio, vLLM or your own proxy.
 - Command palette (`Ctrl/⌘ K`) over commands and chats, and a shortcuts sheet (`Ctrl/⌘ /`)
 - Settings: per-provider API keys, optional base URL, default provider and model, system prompt
   with four persona presets, creativity slider
-- Usage meter estimating messages and tokens per workspace
+- Usage meter in the sidebar — click it for a **Usage & limits** panel (animated dialog) with the
+  live model and provider, context-window fill for the current chat, system-prompt cost, room left
+  and turns remaining, a context-window table for every model on the current provider, and
+  workspace totals
 - Markdown rendering with per-block code copy, message copy, edit-and-resend
 - Export any chat to Markdown
 - Light / System / Dark switch, remembered across pages and sessions
